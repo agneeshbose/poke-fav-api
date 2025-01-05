@@ -4,13 +4,13 @@ import { pokeApiClient } from "../lib/poke-api-client.js";
 const pokeRouter = express.Router();
 
 pokeRouter.get("*", async (req, res) => {
-  const { method, params, body, path } = req;
+  const { method, params, body, path, query } = req;
 
   try {
     const response = await pokeApiClient({
       method: method,
       url: path,
-      params: params,
+      params: { ...params, ...query },
       data: body,
     });
 

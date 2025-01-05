@@ -1,13 +1,15 @@
 import express from "express";
-import { readFile, writeFile } from "fs/promises";
+
+import { loadFavourites, saveFavourites } from "../services/favourites.js";
 
 const favouritesRouter = express.Router();
 
 favouritesRouter.get("/", async (req, res) => {
   try {
-    const data = await readFile("src/data/favourites.json");
-    res.status(200).json({ status: "OK", data: JSON.parse(data) });
+    const favourites = await loadFavourites();
+    res.status(200).json({ status: "OK", data: favourites });
   } catch (error) {
+    console.error(error);
     res
       .status(500)
       .json({ status: "FAILED", message: "Internal server error" });
@@ -17,28 +19,28 @@ favouritesRouter.get("/", async (req, res) => {
 favouritesRouter.post("/", async (req, res) => {
   try {
     const { body } = req;
-    //Validate input : TODO
-    console.log({ body });
 
-    const data = await readFile("src/data/favourites.json");
-    const favourites = JSON.parse(data);
+    if (!body?.name || !body?.url) {
+      return res.status(400).json({
+        status: "FAILED",
+        message: "Invalid input. 'name' and 'url' are required.",
+      });
+    }
+
     const { name, url } = body;
+    const favourites = await loadFavourites();
+    const isAlreadyPresent = favourites.some((item) => item.name === name);
 
-    const isPresent = favourites.some((item) => item.name === name);
-
-    if (isPresent) {
+    if (isAlreadyPresent) {
       return res
         .status(409)
-        .json({ status: "Already exists", data: favourites });
+        .json({ status: "FAILED", message: "Item already exists" });
     }
 
     favourites.push({ name, url });
-    await writeFile(
-      "src/data/favourites.json",
-      JSON.stringify(favourites, null, 2)
-    );
+    await saveFavourites(favourites);
 
-    res.status(201).json({ status: "Created", data: favourites });
+    res.status(201).json({ status: "CREATED", data: favourites });
   } catch (error) {
     console.log({ error });
 
@@ -49,27 +51,37 @@ favouritesRouter.post("/", async (req, res) => {
 });
 
 favouritesRouter.delete("/:name", async (req, res) => {
-  const { name } = req.params;
+  try {
+    const { name } = req.params;
 
-  const data = await readFile("src/data/favourites.json");
-  const favourites = JSON.parse(data);
+    if (!name) {
+      return res.status(400).json({
+        status: "FAILED",
+        message: "Invalid input. 'name' parameter is required.",
+      });
+    }
 
-  const itemIndex = favourites.findIndex((item) => item.name === name);
+    const favourites = await loadFavourites();
+    const itemIndex = favourites.findIndex((item) => item.name === name);
 
-  if (itemIndex === -1) {
-    return res
-      .status(409)
-      .json({ status: "Resource does not exist", data: favourites });
+    if (itemIndex === -1) {
+      return res
+        .status(404)
+        .json({ status: "FAILED", message: "Resource not found" });
+    }
+
+    favourites.splice(itemIndex, 1);
+    await saveFavourites(favourites);
+
+    res.status(200).json({ status: "OK", data: favourites });
+  } catch (err) {
+    console.error(err);
+
+    res.status(500).json({
+      status: "FAILED",
+      message: "Internal server error.",
+    });
   }
-
-  favourites.splice(itemIndex, 1);
-
-  await writeFile(
-    "src/data/favourites.json",
-    JSON.stringify(favourites, null, 2)
-  );
-
-  res.status(200).json({ status: "OK", data: favourites });
 });
 
 export { favouritesRouter };
