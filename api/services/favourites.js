@@ -1,33 +1,41 @@
-import { readFile, writeFile } from "fs/promises";
-import path from "path";
-import { fileURLToPath } from "url";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const favouritesFilePath = path.resolve(__dirname, "../data/favourites.json");
+import Favourite from "../models/favourite.js";
 
 const loadFavourites = async () => {
   try {
-    const data = await readFile(favouritesFilePath, "utf-8");
-    return JSON.parse(data);
+    const favourites = await Favourite.find({});
+    return favourites;
   } catch (error) {
-    console.error(error);
-    throw new Error("Failed to load favourites.");
+    throw new Error("Error loading favourites" + error.message);
   }
 };
 
-const saveFavourites = async (favourites) => {
+const saveFavourite = async (favourite) => {
   try {
-    await writeFile(
-      favouritesFilePath,
-      JSON.stringify(favourites, null, 2),
-      "utf-8"
-    );
+    const existing = await Favourite.findOne({ name: favourite.name });
+    if (existing) {
+      const error = new Error("Favourite already exists");
+      error.code = "DUPLICATE";
+      throw error;
+    }
+
+    const newFavourite = new Favourite(favourite);
+    const result = await newFavourite.save();
+    return result;
   } catch (error) {
-    console.error(error);
-    throw new Error("Failed to save favourites.");
+    if (error.code) {
+      throw error;
+    }
+    throw new Error("Error saving favourite" + error.message);
   }
 };
 
-export { loadFavourites, saveFavourites };
+const deleteFavourite = async (name) => {
+  try {
+    const result = await Favourite.findOneAndDelete({ name });
+    return result;
+  } catch (error) {
+    throw new Error("Failed to delete favourite" + error.message);
+  }
+};
+
+export { loadFavourites, saveFavourite, deleteFavourite };

@@ -1,16 +1,20 @@
 import express from "express";
 
-import { loadFavourites, saveFavourites } from "../services/favourites.js";
+import {
+  deleteFavourite,
+  loadFavourites,
+  saveFavourite,
+} from "../services/favourites.js";
 
 const favouritesRouter = express.Router();
 
 favouritesRouter.get("/", async (req, res) => {
   try {
     const favourites = await loadFavourites();
-    res.status(200).json({ status: "OK", data: favourites });
+    return res.status(200).json({ status: "OK", data: favourites });
   } catch (error) {
     console.error(error);
-    res
+    return res
       .status(500)
       .json({ status: "FAILED", message: "Internal server error" });
   }
@@ -28,25 +32,19 @@ favouritesRouter.post("/", async (req, res) => {
     }
 
     const { name, url } = body;
-    const favourites = await loadFavourites();
-    const isAlreadyPresent = favourites.some((item) => item.name === name);
+    const favourite = await saveFavourite({ name, url });
 
-    if (isAlreadyPresent) {
-      return res
-        .status(409)
-        .json({ status: "FAILED", message: "Item already exists" });
-    }
-
-    favourites.push({ name, url });
-    await saveFavourites(favourites);
-
-    res.status(201).json({ status: "CREATED", data: favourites });
+    res.status(201).json({ status: "CREATED", data: favourite });
   } catch (error) {
-    console.log({ error });
+    console.error(error);
 
-    res
-      .status(500)
-      .json({ status: "FAILED", message: "Internal server error" });
+    if (error.code === "DUPLICATE") {
+      return res.status(409).json({ message: error.message });
+    } else {
+      return res
+        .status(500)
+        .json({ status: "FAILED", message: "Internal server error" });
+    }
   }
 });
 
@@ -61,26 +59,23 @@ favouritesRouter.delete("/:name", async (req, res) => {
       });
     }
 
-    const favourites = await loadFavourites();
-    const itemIndex = favourites.findIndex((item) => item.name === name);
+    const result = await deleteFavourite(name);
 
-    if (itemIndex === -1) {
+    if (result.deletedCount === 0) {
       return res
         .status(404)
         .json({ status: "FAILED", message: "Resource not found" });
     }
 
-    favourites.splice(itemIndex, 1);
-    await saveFavourites(favourites);
+    res
+      .status(200)
+      .json({ status: "OK", message: "Favourite deleted successfully" });
+  } catch (error) {
+    console.error(error);
 
-    res.status(200).json({ status: "OK", data: favourites });
-  } catch (err) {
-    console.error(err);
-
-    res.status(500).json({
-      status: "FAILED",
-      message: "Internal server error.",
-    });
+    return res
+      .status(500)
+      .json({ status: "FAILED", message: "Internal server error" });
   }
 });
 
